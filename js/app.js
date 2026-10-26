@@ -596,6 +596,34 @@
     renderGrid(false);
     if (!$('modal').hidden) updateEmailText();
   }
+  /* ---------------- light / dark theme ---------------- */
+
+  const THEME_KEY = 'worldmeetings:theme';
+  const SUN_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4.5"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>';
+  const MOON_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.5 14.5A8.5 8.5 0 0 1 9.5 3.5a8.5 8.5 0 1 0 11 11z"/></svg>';
+  const systemDark = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null;
+
+  function currentTheme() {
+    const t = document.documentElement.getAttribute('data-theme');
+    if (t === 'light' || t === 'dark') return t;
+    return systemDark && systemDark.matches ? 'dark' : 'light';
+  }
+  function updateThemeBtn() {
+    const dark = currentTheme() === 'dark';
+    const b = $('themeBtn');
+    b.innerHTML = dark ? SUN_SVG : MOON_SVG;
+    b.setAttribute('aria-label', dark ? 'Switch to light mode' : 'Switch to dark mode');
+    b.title = dark ? 'Light mode' : 'Dark mode';
+  }
+  $('themeBtn').addEventListener('click', () => {
+    const next = currentTheme() === 'dark' ? 'light' : 'dark';
+    document.documentElement.setAttribute('data-theme', next);
+    try { localStorage.setItem(THEME_KEY, next); } catch (e) { /* ignore */ }
+    updateThemeBtn();
+  });
+  if (systemDark && systemDark.addEventListener) systemDark.addEventListener('change', updateThemeBtn);
+  updateThemeBtn();
+
   $('fmt12').addEventListener('click', () => setFormat(false));
   $('fmt24').addEventListener('click', () => setFormat(true));
 

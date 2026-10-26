@@ -32,8 +32,9 @@
   font-synthesis: none;
 }
 
+/* Dark theme: follows the system unless the user picked a theme with the toggle. */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --bg: #0f1412;
     --surface: #171e1b;
     --surface-2: #1d2622;
@@ -54,7 +55,31 @@
     --night: #262b29;
     --night-ink: #7e8a84;
     --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 4px 16px rgba(0, 0, 0, .25);
+    color-scheme: dark;
   }
+}
+:root[data-theme="dark"] {
+  --bg: #0f1412;
+  --surface: #171e1b;
+  --surface-2: #1d2622;
+  --border: #2a3530;
+  --text: #e7eeea;
+  --muted: #97a59e;
+  --accent: #3fbf73;
+  --accent-ink: #08130d;
+  --accent-soft: #1f3a2b;
+  --focus: #6aa8ff;
+
+  --good: #3fbf73;
+  --good-ink: #06140c;
+  --ok: #2f8a55;
+  --ok-ink: #e9fbef;
+  --shoulder: #2a5139;
+  --shoulder-ink: #cdebd8;
+  --night: #262b29;
+  --night-ink: #7e8a84;
+  --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 4px 16px rgba(0, 0, 0, .25);
+  color-scheme: dark;
 }
 
 * { box-sizing: border-box; }
@@ -131,6 +156,14 @@ button, input, select, textarea { font: inherit; color: inherit; }
 }
 .seg button[aria-pressed="true"] { background: var(--surface); color: var(--text); box-shadow: var(--shadow); }
 .topbar .seg button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
+.top-ctl { display: flex; align-items: center; gap: 10px; }
+.theme-btn {
+  width: 38px; height: 38px; border-radius: 10px; cursor: pointer; padding: 0;
+  border: 1px solid var(--border); background: var(--surface-2); color: var(--text);
+  display: inline-grid; place-items: center;
+}
+.theme-btn:hover { border-color: var(--muted); }
+.theme-btn svg { width: 18px; height: 18px; }
 
 /* ---------- calendar ---------- */
 .cal-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
@@ -241,7 +274,8 @@ button, input, select, textarea { font: inherit; color: inherit; }
   transition: transform .08s ease;
 }
 .col:hover .cell, .col:focus-visible .cell { filter: brightness(.94); }
-@media (prefers-color-scheme: dark) { .col:hover .cell, .col:focus-visible .cell { filter: brightness(1.25); } }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .col:hover .cell, :root:not([data-theme="light"]) .col:focus-visible .cell { filter: brightness(1.25); } }
+:root[data-theme="dark"] .col:hover .cell, :root[data-theme="dark"] .col:focus-visible .cell { filter: brightness(1.25); }
 .col:hover { transform: translateY(-1px); }
 .col:hover::after, .col:focus-visible::after {
   content: ""; position: absolute; inset: 42px -1px -2px; border-radius: 9px;
