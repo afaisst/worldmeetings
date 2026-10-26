@@ -16,6 +16,7 @@ An app to schedule meetings easily across the globe.
 - **Suggested times** (below the grid): the top three times for everyone. If no single time falls in everyone's daytime (9am – 8pm), it splits the group into separate meetings (usually two, e.g. *Pacific + Tokyo + Hawaii* and *Pacific + Eastern + Europe*), each with its top three times. Your home zone is in every meeting. If one meeting would work with some people joining early or late (7 – 9am, 8 – 11pm), that is shown as an alternative. Clicking a suggestion opens the email text for just that meeting's time zones.
 - **Click any time** to open a dialog with ready-to-paste email text ("Let's meet on: …") listing the time in every zone, with an optional duration and UTC offsets. Click **Copy**.
 - 12h / 24h toggle; settings are remembered in your browser (localStorage).
+- **Share**: copies a link with the selected date, the time zones (order, names, checked/unchecked), the home zone and the sort mode. Whoever opens it sees the same view; their own saved list is replaced, with an *Undo* button. The selected date is also kept in the address (`#2026-12-16`), so a refresh stays on that day.
 
 ## Correctness
 

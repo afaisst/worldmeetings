@@ -26,9 +26,73 @@
 
   function zoneFromPlace(p) { return { id: newId(), tz: p.tz, city: p.city, country: p.country, enabled: true }; }
 
+  /* The selected date lives in the URL (e.g. index.html#2026-12-16), so a page
+     refresh keeps it and the link can be bookmarked or shared. Opening the page
+     without a date shows today. */
+  function dateFromHash() {
+    const m = /^#(\d{4})-(\d{2})-(\d{2})$/.exec(location.hash || '');
+    if (!m) return null;
+    const y = +m[1], mo = +m[2], d = +m[3];
+    const t = new Date(Date.UTC(y, mo - 1, d));
+    if (t.getUTCFullYear() !== y || t.getUTCMonth() !== mo - 1 || t.getUTCDate() !== d) return null;
+    return { y, m: mo, d };
+  }
+  function dateToHash(d) {
+    const p = (n) => (n < 10 ? '0' : '') + n;
+    return '#' + d.y + '-' + p(d.m) + '-' + p(d.d);
+  }
+
+  /* ---------- shared links ----------
+     ?z=<zones>&h=<home index>&s=best#YYYY-MM-DD
+     zones: comma-separated, each "Area/Zone~City"; a leading "!" marks an
+     unchecked zone. Opening such a link loads those settings. */
+  function zonesToParam(zones) {
+    return zones.map((z) => (z.enabled === false ? '!' : '') + encodeURIComponent(z.tz + '~' + z.city)
+      .replace(/%2F/g, '/').replace(/%20/g, '+')).join(',');
+  }
+  function zonesFromParam(str) {
+    const out = [];
+    for (const raw of str.split(',')) {
+      if (!raw) continue;
+      const off = raw.charAt(0) === '!';
+      let txt;
+      try { txt = decodeURIComponent((off ? raw.slice(1) : raw).replace(/\+/g, ' ')); } catch (e) { continue; }
+      const k = txt.indexOf('~');
+      const tz = k >= 0 ? txt.slice(0, k) : txt;
+      if (!T.isValidZone(tz)) continue;
+      const p = C.placeForZone(places, tz);
+      const city = (k >= 0 ? txt.slice(k + 1) : '').trim() || p.city;
+      const known = places.find((x) => x.tz === tz && x.city === city);
+      out.push({ id: newId(), tz, city, country: known ? known.country : p.country, enabled: !off });
+    }
+    return out;
+  }
+  // Settings from a shared link (read once, before the saved settings).
+  const shared = (function () {
+    let q;
+    try { q = new URLSearchParams(location.search); } catch (e) { return null; }
+    const zs = q.get('z');
+    if (!zs) return null;
+    // Parse the raw query text (not the decoded value) so commas inside city names stay intact.
+    const rawZ = (/[?&]z=([^&#]*)/.exec(location.search) || [])[1] || '';
+    const zones = zonesFromParam(rawZ);
+    if (!zones.length) return null;
+    const h = parseInt(q.get('h'), 10);
+    return { zones, home: h >= 0 && h < zones.length ? h : 0, sort: q.get('s') === 'best' ? 'best' : null };
+  })();
+  let previousSaved = null; // for "Undo" after loading a shared link
+
   function loadState() {
     let saved = null;
-    try { saved = JSON.parse(localStorage.getItem(STORE_KEY) || 'null'); } catch (e) { saved = null; }
+    try { previousSaved = localStorage.getItem(STORE_KEY); } catch (e) { previousSaved = null; }
+    try { saved = JSON.parse(previousSaved || 'null'); } catch (e) { saved = null; }
+    if (shared) {
+      shared.zones[shared.home].enabled = true;
+      saved = Object.assign({}, saved || {}, {
+        zones: shared.zones, homeId: shared.zones[shared.home].id,
+        sort: shared.sort || (saved && saved.sort) || 'chrono',
+      });
+    }
     const local = T.localZone();
     let zones = (saved && Array.isArray(saved.zones) ? saved.zones : [])
       .filter((z) => z && typeof z.tz === 'string' && T.isValidZone(z.tz))
@@ -38,11 +102,12 @@
     if (!zones.some((z) => z.id === homeId)) homeId = zones[0].id;
     const home = zones.find((z) => z.id === homeId);
     const today = T.todayIn(home.tz);
+    const date = dateFromHash() || today;
     return {
       zones,
       homeId,
-      date: today,
-      view: { y: today.y, m: today.m },
+      date,
+      view: { y: date.y, m: date.m },
       sort: saved && saved.sort === 'best' ? 'best' : 'chrono',
       use24: saved && typeof saved.use24 === 'boolean' ? saved.use24 : defaultUse24(),
     };
@@ -110,10 +175,20 @@
 
   function selectDate(d, keepView) {
     state.date = { y: d.y, m: d.m, d: d.d };
+    const h = dateToHash(state.date);
+    if (location.hash !== h) {
+      try { history.replaceState(null, '', h); } catch (e) { location.hash = h; }
+    }
     if (!keepView) state.view = { y: d.y, m: d.m };
     renderCalendar();
     renderGrid(true);
   }
+
+  window.addEventListener('hashchange', () => {
+    const d = dateFromHash();
+    const c = state.date;
+    if (d && (d.y !== c.y || d.m !== c.m || d.d !== c.d)) selectDate(d);
+  });
 
   $('calPrev').addEventListener('click', () => {
     const v = state.view; state.view = v.m === 1 ? { y: v.y - 1, m: 12 } : { y: v.y, m: v.m - 1 }; renderCalendar();
@@ -726,6 +801,47 @@
     }
   });
 
+  /* ---------------- share & toast ---------------- */
+
+  let toastTimer = null;
+  function toast(msg, actionLabel, action, extraNode) {
+    const t = $('toast');
+    t.textContent = '';
+    t.append(el('span', { class: 'toast-msg', text: msg }));
+    if (extraNode) t.append(extraNode);
+    if (actionLabel) {
+      const b = el('button', { type: 'button', class: 'toast-btn', text: actionLabel });
+      b.addEventListener('click', () => { t.hidden = true; action(); });
+      t.append(b);
+    }
+    const x = el('button', { type: 'button', class: 'toast-x', text: '×', 'aria-label': 'Dismiss' });
+    x.addEventListener('click', () => { t.hidden = true; });
+    t.append(x);
+    t.hidden = false;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => { t.hidden = true; }, extraNode ? 20000 : 8000);
+  }
+
+  function shareUrl() {
+    const homeIndex = Math.max(0, state.zones.findIndex((z) => z.id === state.homeId));
+    let q = '?z=' + zonesToParam(state.zones) + '&h=' + homeIndex;
+    if (state.sort === 'best') q += '&s=best';
+    return location.href.split(/[?#]/)[0] + q + dateToHash(state.date);
+  }
+
+  $('shareBtn').addEventListener('click', async () => {
+    const url = shareUrl();
+    let ok = false;
+    try { await navigator.clipboard.writeText(url); ok = true; } catch (e) { ok = false; }
+    if (ok) {
+      toast('Link copied. Anyone who opens it sees this date and these time zones.');
+    } else {
+      const input = el('input', { class: 'toast-input', type: 'text', readonly: '', value: url, 'aria-label': 'Share link' });
+      toast('Copy this link to share this date and these time zones:', null, null, input);
+      input.focus(); input.select();
+    }
+  });
+
   /* ---------------- boot ---------------- */
 
   setFormat(state.use24);
@@ -734,6 +850,18 @@
   renderCalendar();
   renderZones();
   renderGrid(true);
+
+  if (shared) {
+    save();
+    // Tidy the address bar: keep only the date, so a refresh keeps the view.
+    try { history.replaceState(null, '', location.pathname + dateToHash(state.date)); } catch (e) { /* ignore */ }
+    const hadOwn = previousSaved && previousSaved !== localStorage.getItem(STORE_KEY);
+    toast('Opened a shared view: ' + activeZones().length + ' time zones.' + (hadOwn ? ' Your own list was replaced.' : ''),
+      hadOwn ? 'Undo' : null, () => {
+        try { localStorage.setItem(STORE_KEY, previousSaved); } catch (e) { /* ignore */ }
+        location.reload();
+      });
+  }
 
   // Keep the live clocks and the "now" marker current.
   function nowSlotIdx() {
