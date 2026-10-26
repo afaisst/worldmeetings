@@ -19,3 +19,9 @@ CLAUDE.local.md
 .vscode/
 .idea/
 *.swp
+
+# Holiday generator dependencies
+tools/node_modules/
+tools/package.json
+tools/package-lock.json
+_to_delete/

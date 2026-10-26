@@ -22,6 +22,13 @@
       </div>
     </div>
     <div class="top-ctl">
+      <div class="hol-ctl">
+        <span class="sort-label" id="holLabel">Holidays</span>
+        <div class="seg" role="group" aria-labelledby="holLabel">
+          <button type="button" id="holExclude" aria-pressed="true" title="No meetings on public holidays">Exclude</button>
+          <button type="button" id="holInclude" aria-pressed="false" title="Meetings on public holidays are fine">Include</button>
+        </div>
+      </div>
       <div class="seg" role="group" aria-label="Clock format">
         <button type="button" id="fmt12" aria-pressed="true">12h</button>
         <button type="button" id="fmt24" aria-pressed="false">24h</button>
@@ -76,12 +83,13 @@
             </div>
             <button type="button" class="icon-btn" id="dayNext" aria-label="Next day">&#8250;</button>
           </div>
+          <div class="head-ctls">
           <div class="sort-ctl">
-            <span class="sort-label" id="sortLabel">Sort times</span>
-            <div class="seg" role="group" aria-labelledby="sortLabel">
+            <div class="seg" role="group" aria-label="Sort times">
               <button type="button" id="sortChrono" aria-pressed="true">Chronological</button>
               <button type="button" id="sortBest" aria-pressed="false">Best first</button>
             </div>
+          </div>
           </div>
         </div>
 
@@ -91,6 +99,7 @@
           <span><i class="sw shoulder"></i>Morning / evening (7–9am, 8–11pm)</span>
           <span><i class="sw night"></i>Night</span>
           <span><span class="star top m1">★</span>Suggested (see below)</span>
+          <span><s class="hol-legend">Wed 16</s>Public holiday</span>
           <span class="legend-tip">Click a time to get text for an email.</span>
         </div>
 
@@ -153,6 +162,8 @@
   <script src="js/tz.js"></script>
   <script src="js/cities.js"></script>
   <script src="js/suggest.js"></script>
+  <script src="js/zone-countries.js"></script>
+  <script src="js/holidays.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>

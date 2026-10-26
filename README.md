@@ -16,6 +16,7 @@ An app to schedule meetings easily across the globe.
 - **Suggested times** (below the grid): the top three times for everyone. If no single time falls in everyone's daytime (9am – 8pm), it splits the group into separate meetings (usually two, e.g. *Pacific + Tokyo + Hawaii* and *Pacific + Eastern + Europe*), each with its top three times. Your home zone is in every meeting. If one meeting would work with some people joining early or late (7 – 9am, 8 – 11pm), that is shown as an alternative. Clicking a suggestion opens the email text for just that meeting's time zones. When several meetings are needed, **Copy best suggestions** opens one text with the best time of each meeting ("No single time works well for every time zone, so let's have two meetings: …").
 - **Click any time** to open a dialog with ready-to-paste email text ("Let's meet on: …") listing the time in every zone, with an optional duration and UTC offsets. Click **Copy**.
 - 12h / 24h toggle; settings are remembered in your browser (localStorage).
+- **Public holidays**: national public holidays of each time zone's country are marked in the grid (date struck through, red stripes when excluded) and with a red dot in the calendar; the header lists them. **Holidays: Exclude** (default) never suggests a time that falls on someone's holiday and ranks those times last; **Include** only marks them. Email text notes holidays. Data: `data/holidays/` (2025–2035, from the [date-holidays](https://github.com/commenthol/date-holidays) package; national holidays only, not state/canton ones). Regenerate with `cd tools && npm install date-holidays && node build-holidays.js`.
 - **Share**: copies a link with the selected date, the time zones (order, names, checked/unchecked), the home zone and the sort mode. Whoever opens it sees the same view; their own saved list is replaced, with an *Undo* button. The selected date is also kept in the address (`#2026-12-16`), so a refresh stays on that day.
 
 ## Correctness
@@ -46,6 +47,10 @@ css/style.css     styles (light & dark mode)
 js/tz.js          time-zone math (DST-safe conversions, colors, formatting)
 js/cities.js      searchable city list + all IANA zones
 js/suggest.js     suggested times / splitting into several meetings
+js/holidays.js    loads holiday data per country on demand
+js/zone-countries.js  time zone -> country code
+data/holidays/    national public holidays per country (generated)
+tools/            build-holidays.js (regenerates data/holidays)
 js/app.js         UI: calendar, zone list, grid, sorting, suggestions, email dialog
 tests/            correctness check against Python zoneinfo
 ```

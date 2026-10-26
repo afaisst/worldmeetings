@@ -5,6 +5,10 @@
   const T = window.WMTime;
   const C = window.WMCities;
   const S = window.WMSuggest;
+  const H = window.WMHolidays;
+  const ZONE_CC = window.WMZoneCountries || {};
+  // Scores used for sorting / the overlap bar; a holiday (when excluded) ranks below night.
+  const SCORE = Object.assign({ holiday: -1 }, T.SCORE);
   const $ = (id) => document.getElementById(id);
   const STORE_KEY = 'worldmeetings:v1';
   const SLOT_MIN = 60;
@@ -78,7 +82,8 @@
     const zones = zonesFromParam(rawZ);
     if (!zones.length) return null;
     const h = parseInt(q.get('h'), 10);
-    return { zones, home: h >= 0 && h < zones.length ? h : 0, sort: q.get('s') === 'best' ? 'best' : null };
+    return { zones, home: h >= 0 && h < zones.length ? h : 0, sort: q.get('s') === 'best' ? 'best' : null,
+      holidays: q.get('hol') === 'include' ? 'include' : 'exclude' };
   })();
   let previousSaved = null; // for "Undo" after loading a shared link
 
@@ -91,6 +96,7 @@
       saved = Object.assign({}, saved || {}, {
         zones: shared.zones, homeId: shared.zones[shared.home].id,
         sort: shared.sort || (saved && saved.sort) || 'chrono',
+        holidays: shared.holidays,
       });
     }
     const local = T.localZone();
@@ -109,6 +115,7 @@
       date,
       view: { y: date.y, m: date.m },
       sort: saved && saved.sort === 'best' ? 'best' : 'chrono',
+      holidays: saved && saved.holidays === 'include' ? 'include' : 'exclude',
       use24: saved && typeof saved.use24 === 'boolean' ? saved.use24 : defaultUse24(),
     };
   }
@@ -118,7 +125,7 @@
   function save() {
     try {
       localStorage.setItem(STORE_KEY, JSON.stringify({
-        zones: state.zones, homeId: state.homeId, sort: state.sort, use24: state.use24,
+        zones: state.zones, homeId: state.homeId, sort: state.sort, use24: state.use24, holidays: state.holidays,
       }));
     } catch (e) { /* private mode etc. — app still works */ }
   }
@@ -167,7 +174,17 @@
       const isSel = d.y === sel.y && d.m === sel.m && d.d === sel.d;
       if (isSel) b.classList.add('selected');
       b.setAttribute('aria-pressed', String(isSel));
-      b.setAttribute('aria-label', T.longDateYMD(d.y, d.m, d.d));
+      const ymd = d.y + '-' + (d.m < 10 ? '0' : '') + d.m + '-' + (d.d < 10 ? '0' : '') + d.d;
+      const hols = [];
+      for (const z of activeZones()) {
+        const cc = zoneCC(z);
+        if (!cc) continue;
+        H.ensure(cc);
+        const hn = H.get(cc, ymd);
+        if (hn) hols.push(hn + ' (' + z.city + ')');
+      }
+      if (hols.length) { b.classList.add('has-hol'); b.title = 'Public holiday: ' + [...new Set(hols)].join(', '); }
+      b.setAttribute('aria-label', T.longDateYMD(d.y, d.m, d.d) + (hols.length ? ', public holiday: ' + hols.join(', ') : ''));
       b.addEventListener('click', () => selectDate(d));
       grid.append(b);
     }
@@ -433,16 +450,47 @@
 
   let currentSlots = [];
 
+  /* ---------------- holidays ---------------- */
+
+  const zoneCC = (z) => ZONE_CC[z.tz] || '';
+  function ymdOf(tz, ms) {
+    const p = T.getParts(tz, ms);
+    return p.year + '-' + (p.month < 10 ? '0' : '') + p.month + '-' + (p.day < 10 ? '0' : '') + p.day;
+  }
+  /** National holiday name in the zone's country on its local date at `ms`, or ''. */
+  function holidayAt(z, ms) {
+    const cc = zoneCC(z);
+    if (!cc) return '';
+    H.ensure(cc);
+    return H.get(cc, ymdOf(z.tz, ms));
+  }
+  H.onChange(() => { renderCalendar(); renderGrid(false); });
+
+  function setHolidays(mode) {
+    state.holidays = mode;
+    $('holExclude').setAttribute('aria-pressed', String(mode === 'exclude'));
+    $('holInclude').setAttribute('aria-pressed', String(mode === 'include'));
+    save();
+    renderGrid(false);
+  }
+  $('holExclude').addEventListener('click', () => setHolidays('exclude'));
+  $('holInclude').addEventListener('click', () => setHolidays('include'));
+
   function computeSlots() {
     const home = homeZone();
     const { y, m, d } = state.date;
     return T.daySlots(home.tz, y, m, d, SLOT_MIN).map((ms, idx) => {
-      const cats = activeZones().map((z) => T.category(z.tz, ms));
-      const scores = cats.map((c) => T.SCORE[c]);
+      const zs = activeZones();
+      const base = zs.map((z) => T.category(z.tz, ms));      // color of the tile
+      const hol = zs.map((z) => holidayAt(z, ms));             // holiday name or ''
+      const excl = state.holidays === 'exclude';
+      const cats = base.map((c, i) => (excl && hol[i] ? 'holiday' : c)); // used for ranking
+      const scores = cats.map((c) => SCORE[c]);
       return {
-        ms, idx, cats,
+        ms, idx, cats, base, hol,
         score: scores.reduce((a, b) => a + b, 0),
         min: Math.min(...scores),
+        holidays: cats.filter((c) => c === 'holiday').length,
         nights: cats.filter((c) => c === 'night').length,
         goods: cats.filter((c) => c === 'good').length,
       };
@@ -466,6 +514,16 @@
         }
       }
       if (changes.length) parts.push('Daylight-saving change: ' + [...new Set(changes)].join(', '));
+      const hols = [], noData = [];
+      activeZones().forEach((z, i) => {
+        const names = [...new Set(slots.map((x) => x.hol[i]).filter(Boolean))];
+        if (names.length) hols.push(z.city + ' (' + names.join(', ') + ')');
+        const cc = zoneCC(z);
+        if (cc && H.status(cc) === 'missing') noData.push(z.city);
+      });
+      if (hols.length) parts.push('Public holiday: ' + hols.join(', ') +
+        (state.holidays === 'exclude' ? ' — avoided in suggestions' : ' — allowed'));
+      if (noData.length) parts.push('No holiday data for ' + noData.join(', '));
     }
     $('daySub').textContent = parts.join(' · ');
   }
@@ -511,14 +569,14 @@
 
     const ordered = state.sort === 'best'
       // Fewest people at night first, then the best overall fit, then earliest.
-      ? slots.slice().sort((a, b) => a.nights - b.nights || b.score - a.score || b.goods - a.goods || a.ms - b.ms)
+      ? slots.slice().sort((a, b) => a.holidays - b.holidays || a.nights - b.nights || b.score - a.score || b.goods - a.goods || a.ms - b.ms)
       : slots;
 
     const startOffsets = activeZones().map((z) => T.offsetMinutes(z.tz, slots[0].ms));
 
     for (const s of ordered) {
       const isNow = now >= s.ms && now < s.ms + SLOT_MIN * T.MIN;
-      const fitPct = Math.round((s.score / (T.SCORE.good * n)) * 100);
+      const fitPct = Math.round((Math.max(0, s.score) / (T.SCORE.good * n)) * 100);
       const fit = el('div', { class: 'fit' + (s.min === T.SCORE.good ? ' perfect' : '') + (s.score === 0 ? ' zero' : '') }, [
         el('i', { style: 'height:' + Math.max(8, fitPct) + '%' }),
       ]);
@@ -542,13 +600,16 @@
         // After a daylight-saving change during the day, also show the new zone abbreviation.
         const dst = T.offsetMinutes(z.tz, s.ms) !== startOffsets[i] ? (T.abbreviation(z.tz, s.ms) || T.offsetLabel(z.tz, s.ms)) : '';
         const small = day + (dst ? ' ' + dst : '');
-        const cell = el('div', { class: 'cell ' + s.cats[i] }, [document.createTextNode(time)]);
-        cell.append(el('small', { class: diff !== 0 ? 'other-day' : '', text: day }));
+        const holName = s.hol[i];
+        const cell = el('div', { class: 'cell ' + s.base[i] + (holName ? ' hol' + (state.holidays === 'exclude' ? ' hol-x' : '') : '') },
+          [document.createTextNode(time)]);
+        if (holName) cell.title = z.city + ': public holiday (' + holName + ')';
+        cell.append(el('small', { class: (diff !== 0 ? 'other-day' : '') + (holName ? ' hol-date' : ''), text: day }));
         if (dst) cell.append(el('small', { text: dst }));
         const p = T.getParts(z.tz, s.ms);
         if (state.sort === 'chrono' && p.hour === 0 && s.idx > 0) cell.classList.add('daystart');
         col.append(cell);
-        aria.push(z.city + ' ' + time + (small ? ' ' + small : ''));
+        aria.push(z.city + ' ' + time + (small ? ' ' + small : '') + (holName ? ' (public holiday: ' + holName + ')' : ''));
       });
       col.setAttribute('aria-label', aria.join(', ') + '. Open text to copy.');
       col.title = T.clockTime(homeZone().tz, s.ms, state.use24) + ' ' + homeZone().city + ' — click for email text';
@@ -579,6 +640,15 @@
       : 'One meeting works for everyone during their daytime (9am–8pm).';
     else summary = 'No single time falls in everyone’s daytime (9am–8pm), so here are ' + k +
       ' meetings that together include every time zone. ' + home.city + ' (home) is in each one.';
+    const homeOff = slots.length > 0 && slots.every((x) => x.cats[homeIdx] === 'holiday');
+    if (homeOff) {
+      summary = 'It is a public holiday in ' + home.city + ' (' + slots.find((x) => x.hol[homeIdx]).hol[homeIdx] +
+        '), so no meeting times are suggested. Switch Holidays to “Include” to see times anyway.';
+      $('suggestSummary').textContent = summary;
+      bestPlan = null;
+      $('copyPlanBtn').hidden = true;
+      return;
+    }
     $('suggestSummary').textContent = summary;
     // With several meetings, offer one text that lists the best time of each.
     bestPlan = k > 1 ? strict.meetings.filter((m) => m.options.length).map((m) => ({
@@ -589,7 +659,8 @@
     body.append(planView(strict.meetings, k > 1, null, true));
     if (strict.uncovered.length) {
       body.append(el('p', { class: 'suggest-empty', text: 'No good time found for: ' +
-        strict.uncovered.map((i) => activeZones()[i].city).join(', ') }));
+        strict.uncovered.map((i) => activeZones()[i].city +
+          (slots.every((s) => s.cats[i] === 'holiday') ? ' (public holiday)' : '')).join(', ') }));
     }
     if (n > 1 && k > 1) {
       const relaxed = S.plan(slots, n, homeIdx, { relaxed: true });
@@ -766,8 +837,9 @@
         if (abbr) tags.push(abbr);
         if (withOffset) tags.push(T.offsetLabel(z.tz, ms));
       }
+      const hn = holidayAt(z, ms);
       lines.push('• ' + z.city + ': ' + T.longDate(z.tz, ms) + ', ' + timeRange(z.tz, ms, end, state.use24) +
-        (tags.length ? ' (' + tags.join(', ') + ')' : ''));
+        (tags.length ? ' (' + tags.join(', ') + ')' : '') + (hn ? ' (public holiday: ' + hn + ')' : ''));
     }
     return lines;
   }
@@ -865,6 +937,7 @@
     const homeIndex = Math.max(0, state.zones.findIndex((z) => z.id === state.homeId));
     let q = '?z=' + zonesToParam(state.zones) + '&h=' + homeIndex;
     if (state.sort === 'best') q += '&s=best';
+    if (state.holidays === 'include') q += '&hol=include';
     return location.href.split(/[?#]/)[0] + q + dateToHash(state.date);
   }
 
@@ -886,6 +959,8 @@
   setFormat(state.use24);
   $('sortChrono').setAttribute('aria-pressed', String(state.sort === 'chrono'));
   $('sortBest').setAttribute('aria-pressed', String(state.sort === 'best'));
+  $('holExclude').setAttribute('aria-pressed', String(state.holidays === 'exclude'));
+  $('holInclude').setAttribute('aria-pressed', String(state.holidays === 'include'));
   renderCalendar();
   renderZones();
   renderGrid(true);
