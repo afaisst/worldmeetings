@@ -8,7 +8,7 @@
   const H = window.WMHolidays;
   const ZONE_CC = window.WMZoneCountries || {};
   // Scores used for sorting / the overlap bar; a holiday (when excluded) ranks below night.
-  const SCORE = Object.assign({ holiday: -1 }, T.SCORE);
+  const SCORE = Object.assign({ holiday: -1, weekend: -1 }, T.SCORE);
   const $ = (id) => document.getElementById(id);
   const STORE_KEY = 'worldmeetings:v1';
   const SLOT_MIN = 60;
@@ -83,7 +83,8 @@
     if (!zones.length) return null;
     const h = parseInt(q.get('h'), 10);
     return { zones, home: h >= 0 && h < zones.length ? h : 0, sort: q.get('s') === 'best' ? 'best' : null,
-      holidays: q.get('hol') === 'include' ? 'include' : 'exclude' };
+      holidays: q.get('hol') === 'include' ? 'include' : 'exclude',
+      weekends: q.get('we') === 'include' ? 'include' : 'exclude' };
   })();
   let previousSaved = null; // for "Undo" after loading a shared link
 
@@ -97,6 +98,7 @@
         zones: shared.zones, homeId: shared.zones[shared.home].id,
         sort: shared.sort || (saved && saved.sort) || 'chrono',
         holidays: shared.holidays,
+        weekends: shared.weekends,
       });
     }
     const local = T.localZone();
@@ -116,6 +118,7 @@
       view: { y: date.y, m: date.m },
       sort: saved && saved.sort === 'best' ? 'best' : 'chrono',
       holidays: saved && saved.holidays === 'include' ? 'include' : 'exclude',
+      weekends: saved && saved.weekends === 'include' ? 'include' : 'exclude',
       use24: saved && typeof saved.use24 === 'boolean' ? saved.use24 : defaultUse24(),
     };
   }
@@ -125,7 +128,7 @@
   function save() {
     try {
       localStorage.setItem(STORE_KEY, JSON.stringify({
-        zones: state.zones, homeId: state.homeId, sort: state.sort, use24: state.use24, holidays: state.holidays,
+        zones: state.zones, homeId: state.homeId, sort: state.sort, use24: state.use24, holidays: state.holidays, weekends: state.weekends,
       }));
     } catch (e) { /* private mode etc. — app still works */ }
   }
@@ -476,6 +479,28 @@
   $('holExclude').addEventListener('click', () => setHolidays('exclude'));
   $('holInclude').addEventListener('click', () => setHolidays('include'));
 
+  /* ---------------- weekends ---------------- */
+
+  // Weekend days by country (0 = Sunday … 6 = Saturday); everywhere else Saturday + Sunday.
+  const WEEKEND_DAYS = {
+    SA: [5, 6], KW: [5, 6], QA: [5, 6], BH: [5, 6], OM: [5, 6], IL: [5, 6], EG: [5, 6], JO: [5, 6],
+    IQ: [5, 6], YE: [5, 6], SY: [5, 6], DZ: [5, 6], LY: [5, 6], SD: [5, 6], BD: [5, 6], MV: [5, 6],
+    PS: [5, 6], IR: [5], AF: [4, 5], NP: [6], BN: [0, 5],
+  };
+  function isWeekend(z, ms) {
+    const days = WEEKEND_DAYS[zoneCC(z)] || [0, 6];
+    return days.indexOf(T.getParts(z.tz, ms).weekday) >= 0;
+  }
+  function setWeekends(mode) {
+    state.weekends = mode;
+    $('weExclude').setAttribute('aria-pressed', String(mode === 'exclude'));
+    $('weInclude').setAttribute('aria-pressed', String(mode === 'include'));
+    save();
+    renderGrid(false);
+  }
+  $('weExclude').addEventListener('click', () => setWeekends('exclude'));
+  $('weInclude').addEventListener('click', () => setWeekends('include'));
+
   function computeSlots() {
     const home = homeZone();
     const { y, m, d } = state.date;
@@ -483,14 +508,17 @@
       const zs = activeZones();
       const base = zs.map((z) => T.category(z.tz, ms));      // color of the tile
       const hol = zs.map((z) => holidayAt(z, ms));             // holiday name or ''
-      const excl = state.holidays === 'exclude';
-      const cats = base.map((c, i) => (excl && hol[i] ? 'holiday' : c)); // used for ranking
+      const wk = zs.map((z) => isWeekend(z, ms));
+      const exclHol = state.holidays === 'exclude';
+      const exclWe = state.weekends === 'exclude';
+      // Category used for ranking: an excluded holiday or weekend never works.
+      const cats = base.map((c, i) => (exclHol && hol[i] ? 'holiday' : (exclWe && wk[i] ? 'weekend' : c)));
       const scores = cats.map((c) => SCORE[c]);
       return {
-        ms, idx, cats, base, hol,
+        ms, idx, cats, base, hol, wk,
         score: scores.reduce((a, b) => a + b, 0),
         min: Math.min(...scores),
-        holidays: cats.filter((c) => c === 'holiday').length,
+        holidays: cats.filter((c) => c === 'holiday' || c === 'weekend').length,
         nights: cats.filter((c) => c === 'night').length,
         goods: cats.filter((c) => c === 'good').length,
       };
@@ -524,6 +552,14 @@
       if (hols.length) parts.push('Public holiday: ' + hols.join(', ') +
         (state.holidays === 'exclude' ? ' — avoided in suggestions' : ' — allowed'));
       if (noData.length) parts.push('No holiday data for ' + noData.join(', '));
+      const fullWe = [], partWe = [];
+      activeZones().forEach((z, i) => {
+        const n = slots.filter((x) => x.wk[i]).length;
+        if (n === slots.length) fullWe.push(z.city); else if (n) partWe.push(z.city);
+      });
+      const weNote = state.weekends === 'exclude' ? ' — avoided in suggestions' : ' — allowed';
+      if (fullWe.length) parts.push('Weekend: ' + fullWe.join(', ') + weNote);
+      if (partWe.length) parts.push('Weekend for part of the day: ' + partWe.join(', ') + (fullWe.length ? '' : weNote));
     }
     $('daySub').textContent = parts.join(' · ');
   }
@@ -601,15 +637,20 @@
         const dst = T.offsetMinutes(z.tz, s.ms) !== startOffsets[i] ? (T.abbreviation(z.tz, s.ms) || T.offsetLabel(z.tz, s.ms)) : '';
         const small = day + (dst ? ' ' + dst : '');
         const holName = s.hol[i];
-        const cell = el('div', { class: 'cell ' + s.base[i] + (holName ? ' hol' + (state.holidays === 'exclude' ? ' hol-x' : '') : '') },
+        const isWe = s.wk[i];
+        const weCls = isWe ? (state.weekends === 'exclude' ? ' weekend' : ' wk-mark') : '';
+        const holExcl = state.holidays === 'exclude';
+        // Excluded holiday: red stripes + struck-through date; included: red bar at the bottom.
+        const cell = el('div', { class: 'cell ' + s.base[i] + weCls + (holName ? ' hol' + (holExcl ? ' hol-x' : ' hol-mark') : '') },
           [document.createTextNode(time)]);
         if (holName) cell.title = z.city + ': public holiday (' + holName + ')';
-        cell.append(el('small', { class: (diff !== 0 ? 'other-day' : '') + (holName ? ' hol-date' : ''), text: day }));
+        else if (isWe) cell.title = z.city + ': weekend';
+        cell.append(el('small', { class: (diff !== 0 ? 'other-day' : '') + (holName && holExcl ? ' hol-date' : ''), text: day }));
         if (dst) cell.append(el('small', { text: dst }));
         const p = T.getParts(z.tz, s.ms);
         if (state.sort === 'chrono' && p.hour === 0 && s.idx > 0) cell.classList.add('daystart');
         col.append(cell);
-        aria.push(z.city + ' ' + time + (small ? ' ' + small : '') + (holName ? ' (public holiday: ' + holName + ')' : ''));
+        aria.push(z.city + ' ' + time + (small ? ' ' + small : '') + (holName ? ' (public holiday: ' + holName + ')' : '') + (isWe ? ' (weekend)' : ''));
       });
       col.setAttribute('aria-label', aria.join(', ') + '. Open text to copy.');
       col.title = T.clockTime(homeZone().tz, s.ms, state.use24) + ' ' + homeZone().city + ' — click for email text';
@@ -635,15 +676,19 @@
     const k = strict.meetings.length;
     let summary;
     if (n === 1) summary = 'Add more time zones to get suggestions. Best times in ' + home.city + ':';
+    else if (k === 1 && strict.uncovered.length) summary = 'One meeting works for everyone who is available on this day:';
     else if (k === 1) summary = strict.meetings[0].relaxed
       ? 'One meeting can include everyone, though someone joins early or late.'
       : 'One meeting works for everyone during their daytime (9am–8pm).';
     else summary = 'No single time falls in everyone’s daytime (9am–8pm), so here are ' + k +
       ' meetings that together include every time zone. ' + home.city + ' (home) is in each one.';
-    const homeOff = slots.length > 0 && slots.every((x) => x.cats[homeIdx] === 'holiday');
+    const homeOff = slots.length > 0 && slots.every((x) => x.cats[homeIdx] === 'holiday' || x.cats[homeIdx] === 'weekend');
     if (homeOff) {
-      summary = 'It is a public holiday in ' + home.city + ' (' + slots.find((x) => x.hol[homeIdx]).hol[homeIdx] +
-        '), so no meeting times are suggested. Switch Holidays to “Include” to see times anyway.';
+      const hn = (slots.find((x) => x.cats[homeIdx] === 'holiday') || {}).hol;
+      summary = hn
+        ? 'It is a public holiday in ' + home.city + ' (' + hn[homeIdx] +
+          '), so no meeting times are suggested. Switch Holidays to “Include” to see times anyway.'
+        : 'It is the weekend in ' + home.city + ', so no meeting times are suggested. Switch Weekends to “Include” to see times anyway.';
       $('suggestSummary').textContent = summary;
       bestPlan = null;
       $('copyPlanBtn').hidden = true;
@@ -658,9 +703,9 @@
     if (bestPlan) $('copyPlanBtn').textContent = 'Copy best suggestions (' + bestPlan.length + ' meetings)';
     body.append(planView(strict.meetings, k > 1, null, true));
     if (strict.uncovered.length) {
-      body.append(el('p', { class: 'suggest-empty', text: 'No good time found for: ' +
+      body.append(el('p', { class: 'suggest-empty uncovered', text: 'Not included (no good time on this day): ' +
         strict.uncovered.map((i) => activeZones()[i].city +
-          (slots.every((s) => s.cats[i] === 'holiday') ? ' (public holiday)' : '')).join(', ') }));
+          offReason(slots, i)).join(', ') }));
     }
     if (n > 1 && k > 1) {
       const relaxed = S.plan(slots, n, homeIdx, { relaxed: true });
@@ -672,6 +717,15 @@
         body.append(planView(relaxed.meetings, r > 1, 'Everyone'));
       }
     }
+  }
+
+  /** Why a zone can't join: its waking hours that day are all holiday / weekend. */
+  function offReason(slots, i) {
+    const awake = slots.filter((s) => s.base[i] !== 'night');
+    if (!awake.length) return '';
+    if (awake.every((s) => s.cats[i] === 'holiday')) return ' (public holiday)';
+    if (awake.every((s) => s.cats[i] === 'holiday' || s.cats[i] === 'weekend')) return ' (weekend)';
+    return '';
   }
 
   function planView(meetings, numbered, singleTitle, starred) {
@@ -938,6 +992,7 @@
     let q = '?z=' + zonesToParam(state.zones) + '&h=' + homeIndex;
     if (state.sort === 'best') q += '&s=best';
     if (state.holidays === 'include') q += '&hol=include';
+    if (state.weekends === 'include') q += '&we=include';
     return location.href.split(/[?#]/)[0] + q + dateToHash(state.date);
   }
 
@@ -961,6 +1016,8 @@
   $('sortBest').setAttribute('aria-pressed', String(state.sort === 'best'));
   $('holExclude').setAttribute('aria-pressed', String(state.holidays === 'exclude'));
   $('holInclude').setAttribute('aria-pressed', String(state.holidays === 'include'));
+  $('weExclude').setAttribute('aria-pressed', String(state.weekends === 'exclude'));
+  $('weInclude').setAttribute('aria-pressed', String(state.weekends === 'include'));
   renderCalendar();
   renderZones();
   renderGrid(true);

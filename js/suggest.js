@@ -26,7 +26,7 @@
 (function (root) {
   'use strict';
 
-  const SCORE = { holiday: -1, night: 0, shoulder: 1, ok: 2, good: 3 }; // holiday = excluded public holiday
+  const SCORE = { holiday: -1, weekend: -1, night: 0, shoulder: 1, ok: 2, good: 3 }; // holiday/weekend = excluded
   const DAYTIME = 2;   // ok or good
   const AWAKE = 1;     // anything but night
   const MAX_MEETINGS = 6;

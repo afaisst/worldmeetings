@@ -20,6 +20,8 @@
   --shoulder-ink: #1d4d2e;
   --night: #e3e5e4;
   --night-ink: #69736e;
+  --weekend: #b4bab7;
+  --weekend-ink: #3c4440;
 
   --m1: #e3a008;
   --m2: #2f6fde;
@@ -56,6 +58,8 @@
     --shoulder-ink: #cdebd8;
     --night: #262b29;
     --night-ink: #7e8a84;
+    --weekend: #0a0d0c;
+    --weekend-ink: #6f7b75;
     --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 4px 16px rgba(0, 0, 0, .25);
     color-scheme: dark;
   }
@@ -80,6 +84,8 @@
   --shoulder-ink: #cdebd8;
   --night: #262b29;
   --night-ink: #7e8a84;
+  --weekend: #0a0d0c;
+  --weekend-ink: #6f7b75;
   --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 4px 16px rgba(0, 0, 0, .25);
   color-scheme: dark;
 }
@@ -272,6 +278,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .sw.ok { background: var(--ok); }
 .sw.shoulder { background: var(--shoulder); }
 .sw.night { background: var(--night); }
+.sw.weekend { background: var(--weekend); box-shadow: inset 0 0 0 1px var(--border); }
 
 /* ---------- time grid ---------- */
 .grid-wrap { overflow-x: auto; border-radius: 10px; scrollbar-width: thin; padding-bottom: 6px; }
@@ -330,16 +337,25 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .cell.ok { background: var(--ok); color: var(--ok-ink); }
 .cell.shoulder { background: var(--shoulder); color: var(--shoulder-ink); }
 .cell.night { background: var(--night); color: var(--night-ink); }
+/* Weekend (excluded): darker gray than night, whatever the time of day. */
+.cell.weekend { background: var(--weekend); color: var(--weekend-ink); box-shadow: inset 0 0 0 1px var(--border); }
+/* Weekend (included): keep the time color, mark with a dark bar at the bottom. */
+.cell.wk-mark { box-shadow: inset 0 -4px 0 0 var(--weekend); }
+/* Holiday (included): red bar at the bottom; with a weekend too, both bars stack. */
+.cell.hol-mark { box-shadow: inset 0 -4px 0 0 var(--hol); }
+.cell.wk-mark.hol-mark { box-shadow: inset 0 -4px 0 0 var(--hol), inset 0 -8px 0 0 var(--weekend); }
+.chip.weekend, .chip.holiday { background: var(--weekend); color: var(--weekend-ink); }
+.dot.weekend, .dot.holiday { background: var(--weekend); }
 .cell small.hol-date { text-decoration: line-through; text-decoration-thickness: 2px; text-decoration-color: var(--hol); opacity: 1; font-weight: 700; }
 .cell.hol-x { background-image: repeating-linear-gradient(135deg, transparent 0 6px, var(--hol-stripe) 6px 9px); }
-.legend .hol-legend { text-decoration: line-through; text-decoration-thickness: 2px; text-decoration-color: var(--hol); font-weight: 700; color: var(--text); margin-right: 2px; }
+.sw.hol { background: var(--surface-2); box-shadow: inset 0 0 0 1px var(--border), inset 0 -4px 0 0 var(--hol); }
 .cal-day { position: relative; }
 .cal-day.has-hol::after {
   content: ""; position: absolute; left: 50%; bottom: 5px; transform: translateX(-50%);
   width: 5px; height: 5px; border-radius: 50%; background: var(--hol);
 }
 .cal-day.selected.has-hol::after { background: var(--accent-ink); }
-.cell.daystart { box-shadow: inset 2px 0 0 0 currentColor; }
+.cell.daystart { border-left: 2px solid currentColor; }
 
 .grid-empty { color: var(--muted); padding: 24px; }
 
@@ -379,6 +395,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .chip.night { background: var(--night); color: var(--night-ink); }
 .alt-title { margin: 18px 0 10px; font-size: 14px; font-weight: 650; color: var(--muted); }
 .suggest-empty { color: var(--muted); font-size: 14px; margin: 0; }
+.suggest-empty.uncovered { margin-top: 12px; }
 
 /* ---------- modal ---------- */
 .modal-backdrop {

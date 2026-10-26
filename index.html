@@ -29,6 +29,13 @@
           <button type="button" id="holInclude" aria-pressed="false" title="Meetings on public holidays are fine">Include</button>
         </div>
       </div>
+      <div class="hol-ctl">
+        <span class="sort-label" id="weLabel">Weekends</span>
+        <div class="seg" role="group" aria-labelledby="weLabel">
+          <button type="button" id="weExclude" aria-pressed="true" title="No meetings on weekends">Exclude</button>
+          <button type="button" id="weInclude" aria-pressed="false" title="Meetings on weekends are fine">Include</button>
+        </div>
+      </div>
       <div class="seg" role="group" aria-label="Clock format">
         <button type="button" id="fmt12" aria-pressed="true">12h</button>
         <button type="button" id="fmt24" aria-pressed="false">24h</button>
@@ -98,8 +105,9 @@
           <span><i class="sw ok"></i>Late afternoon (6–8pm)</span>
           <span><i class="sw shoulder"></i>Morning / evening (7–9am, 8–11pm)</span>
           <span><i class="sw night"></i>Night</span>
+          <span><i class="sw weekend"></i>Weekend</span>
           <span><span class="star top m1">★</span>Suggested (see below)</span>
-          <span><s class="hol-legend">Wed 16</s>Public holiday</span>
+          <span><i class="sw hol"></i>Public holiday</span>
           <span class="legend-tip">Click a time to get text for an email.</span>
         </div>
 
