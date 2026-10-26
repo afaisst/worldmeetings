@@ -1,0 +1,21 @@
+# Local test scripts (not part of the deployed app)
+tests/
+
+# Claude / AI working files and outputs
+Claude outputs/
+claude outputs/
+claude-outputs/
+claude_outputs/
+outputs/
+.claude/
+CLAUDE.local.md
+
+# Downloaded archives
+*.zip
+
+# macOS / editor clutter
+.DS_Store
+._*
+.vscode/
+.idea/
+*.swp
