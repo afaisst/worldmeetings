@@ -4,6 +4,7 @@
 
   const T = window.WMTime;
   const C = window.WMCities;
+  const S = window.WMSuggest;
   const $ = (id) => document.getElementById(id);
   const STORE_KEY = 'worldmeetings:v1';
   const SLOT_MIN = 60;
@@ -23,7 +24,7 @@
     } catch (e) { return false; }
   }
 
-  function zoneFromPlace(p) { return { id: newId(), tz: p.tz, city: p.city, country: p.country }; }
+  function zoneFromPlace(p) { return { id: newId(), tz: p.tz, city: p.city, country: p.country, enabled: true }; }
 
   function loadState() {
     let saved = null;
@@ -31,7 +32,7 @@
     const local = T.localZone();
     let zones = (saved && Array.isArray(saved.zones) ? saved.zones : [])
       .filter((z) => z && typeof z.tz === 'string' && T.isValidZone(z.tz))
-      .map((z) => ({ id: z.id || newId(), tz: z.tz, city: String(z.city || z.tz), country: String(z.country || '') }));
+      .map((z) => ({ id: z.id || newId(), tz: z.tz, city: String(z.city || z.tz), country: String(z.country || ''), enabled: z.enabled !== false }));
     if (!zones.length) zones = [zoneFromPlace(C.placeForZone(places, local))];
     let homeId = saved && saved.homeId;
     if (!zones.some((z) => z.id === homeId)) homeId = zones[0].id;
@@ -58,6 +59,8 @@
   }
 
   const homeZone = () => state.zones.find((z) => z.id === state.homeId) || state.zones[0];
+  // Zones shown in the grid, suggestions and email text (unchecked zones are skipped; home is always on).
+  const activeZones = () => state.zones.filter((z) => z.enabled !== false || z.id === state.homeId);
 
   function el(tag, attrs, children) {
     const n = document.createElement(tag);
@@ -146,8 +149,18 @@
         'aria-label': 'Remove ' + z.city,
       });
       if (state.zones.length === 1) removeBtn.disabled = true;
-      const li = el('li', { class: 'zone', 'data-id': z.id }, [
+      const on = isHome || z.enabled !== false;
+      const toggle = el('input', {
+        type: 'checkbox', class: 'zone-toggle',
+        title: isHome ? 'The home time zone is always included' : (on ? 'Included — uncheck to exclude without removing' : 'Excluded — check to include'),
+        'aria-label': 'Include ' + z.city,
+      });
+      toggle.checked = on;
+      toggle.disabled = isHome;
+      toggle.addEventListener('change', () => setEnabled(z.id, toggle.checked));
+      const li = el('li', { class: 'zone' + (on ? '' : ' off'), 'data-id': z.id }, [
         handle,
+        toggle,
         el('div', { class: 'zone-info' }, [
           el('div', { class: 'zone-row' }, [
             el('span', { class: 'zone-name', text: z.city, title: z.city + ' — ' + z.tz }),
@@ -168,9 +181,20 @@
     }
   }
 
+  function setEnabled(id, on) {
+    const z = state.zones.find((x) => x.id === id);
+    if (!z || z.id === state.homeId) return;
+    z.enabled = on;
+    save();
+    renderZones(id, '.zone-toggle');
+    renderGrid(false);
+  }
+
   function setHome(id) {
     if (state.homeId === id) return;
     state.homeId = id;
+    const hz = state.zones.find((x) => x.id === id);
+    if (hz) hz.enabled = true;
     save();
     renderZones(id, '.home-btn');
     renderCalendar();
@@ -338,7 +362,7 @@
     const home = homeZone();
     const { y, m, d } = state.date;
     return T.daySlots(home.tz, y, m, d, SLOT_MIN).map((ms, idx) => {
-      const cats = state.zones.map((z) => T.category(z.tz, ms));
+      const cats = activeZones().map((z) => T.category(z.tz, ms));
       const scores = cats.map((c) => T.SCORE[c]);
       return {
         ms, idx, cats,
@@ -359,7 +383,7 @@
       const first = slots[0].ms;
       const last = slots[slots.length - 1].ms + SLOT_MIN * T.MIN - 1;
       const changes = [];
-      for (const z of state.zones) {
+      for (const z of activeZones()) {
         const a = T.offsetMinutes(z.tz, first), b = T.offsetMinutes(z.tz, last);
         if (a !== b) {
           const diff = (b - a) / 60;
@@ -378,16 +402,29 @@
     renderDayHead(slots);
     const grid = $('grid');
     grid.textContent = '';
-    if (!state.zones.length) { grid.append(el('div', { class: 'grid-empty', text: 'Add a time zone to get started.' })); return; }
+    if (!activeZones().length) { grid.append(el('div', { class: 'grid-empty', text: 'Add a time zone to get started.' })); return; }
 
     const { y, m, d } = state.date;
-    const n = state.zones.length;
+    const n = activeZones().length;
     const now = Date.now();
     const homeId = state.homeId;
 
+    // Suggested times (computed here so the grid can star them).
+    const homeIdx = Math.max(0, activeZones().findIndex((z) => z.id === homeId));
+    const plan = S.plan(slots, n, homeIdx);
+    const stars = new Map(); // slot ms -> [{meeting, rank}]
+    plan.meetings.forEach((mt, mi) => mt.options.forEach((o, ri) => {
+      if (!stars.has(o.slot.ms)) stars.set(o.slot.ms, []);
+      stars.get(o.slot.ms).push({ meeting: mi, rank: ri });
+    }));
+    const multi = plan.meetings.length > 1;
+
     // Label column
-    const labels = el('div', { class: 'labels' }, [el('div', { class: 'lab fit-lab', text: 'Overlap', title: 'How well each time works for everyone' })]);
-    for (const z of state.zones) {
+    const labels = el('div', { class: 'labels' }, [
+      el('div', { class: 'lab star-lab', text: 'Suggested', title: 'Suggested times (see below the table)' }),
+      el('div', { class: 'lab fit-lab', text: 'Overlap', title: 'How well each time works for everyone' }),
+    ]);
+    for (const z of activeZones()) {
       const city = el('div', { class: 'l-city', title: z.tz }, [document.createTextNode(z.city)]);
       if (z.id === homeId) city.append(el('span', { class: 'l-home', text: 'Home' }));
       labels.append(el('div', { class: 'lab' }, [
@@ -402,7 +439,7 @@
       ? slots.slice().sort((a, b) => a.nights - b.nights || b.score - a.score || b.goods - a.goods || a.ms - b.ms)
       : slots;
 
-    const startOffsets = state.zones.map((z) => T.offsetMinutes(z.tz, slots[0].ms));
+    const startOffsets = activeZones().map((z) => T.offsetMinutes(z.tz, slots[0].ms));
 
     for (const s of ordered) {
       const isNow = now >= s.ms && now < s.ms + SLOT_MIN * T.MIN;
@@ -412,9 +449,17 @@
       ]);
       if (isNow) fit.append(el('span', { class: 'now-tag', text: 'now' }));
 
-      const col = el('button', { type: 'button', class: 'col', 'data-idx': String(s.idx) }, [fit]);
+      const starRow = el('div', { class: 'stars' });
+      for (const st of stars.get(s.ms) || []) {
+        starRow.append(el('span', {
+          class: 'star m' + (st.meeting % 4 + 1) + (st.rank === 0 ? ' top' : ''),
+          text: '★',
+          title: (multi ? 'Meeting ' + (st.meeting + 1) + ', ' : '') + 'suggestion #' + (st.rank + 1),
+        }));
+      }
+      const col = el('button', { type: 'button', class: 'col', 'data-idx': String(s.idx) }, [starRow, fit]);
       const aria = [];
-      state.zones.forEach((z, i) => {
+      activeZones().forEach((z, i) => {
         const time = T.shortTime(z.tz, s.ms, state.use24);
         const diff = T.dayDiff(z.tz, s.ms, y, m, d);
         // Every tile shows its local date; dates that differ from the selected day are emphasized.
@@ -436,7 +481,87 @@
       grid.append(col);
     }
 
+    renderSuggestions(slots, plan);
     if (resetScroll) scrollGrid();
+  }
+
+  /* ---------------- suggested times ---------------- */
+
+  function renderSuggestions(slots, strictPlan) {
+    const body = $('suggestBody');
+    body.textContent = '';
+    const n = activeZones().length;
+    const homeIdx = Math.max(0, activeZones().findIndex((z) => z.id === state.homeId));
+    const home = activeZones()[homeIdx];
+    const strict = strictPlan || S.plan(slots, n, homeIdx);
+    const k = strict.meetings.length;
+    let summary;
+    if (n === 1) summary = 'Add more time zones to get suggestions. Best times in ' + home.city + ':';
+    else if (k === 1) summary = strict.meetings[0].relaxed
+      ? 'One meeting can include everyone, though someone joins early or late.'
+      : 'One meeting works for everyone during their daytime (9am–8pm).';
+    else summary = 'No single time falls in everyone’s daytime (9am–8pm), so here are ' + k +
+      ' meetings that together include every time zone. ' + home.city + ' (home) is in each one.';
+    $('suggestSummary').textContent = summary;
+    body.append(planView(strict.meetings, k > 1, null, true));
+    if (strict.uncovered.length) {
+      body.append(el('p', { class: 'suggest-empty', text: 'No good time found for: ' +
+        strict.uncovered.map((i) => activeZones()[i].city).join(', ') }));
+    }
+    if (n > 1 && k > 1) {
+      const relaxed = S.plan(slots, n, homeIdx, { relaxed: true });
+      const r = relaxed.meetings.length;
+      if (r < k) {
+        body.append(el('h3', { class: 'alt-title', text: r === 1
+          ? 'Or one meeting for everyone, if some can join early or late (7–9am, 8–11pm)'
+          : 'Or ' + r + ' meetings, if some can join early or late (7–9am, 8–11pm)' }));
+        body.append(planView(relaxed.meetings, r > 1, 'Everyone'));
+      }
+    }
+  }
+
+  function planView(meetings, numbered, singleTitle, starred) {
+    const wrap = el('div', { class: 'meetings' });
+    const homeIdx = activeZones().findIndex((z) => z.id === state.homeId);
+    meetings.forEach((m, mi) => {
+      const names = m.members.map((i) => activeZones()[i].city);
+      const box = el('div', { class: 'meeting' }, [
+        el('h3', null, [
+          starred ? el('span', { class: 'star top m' + (mi % 4 + 1), text: '★ ', 'aria-hidden': 'true' }) : null,
+          document.createTextNode(numbered ? 'Meeting ' + (mi + 1) : (singleTitle || 'Top choices')),
+        ]),
+        el('p', { class: 'who', text: names.join(' · ') }),
+      ]);
+      const ol = el('ol');
+      if (!m.options.length) ol.append(el('li', { class: 'suggest-empty', text: 'No time works for all of these on this day.' }));
+      m.options.forEach((o, oi) => {
+        const ms = o.slot.ms;
+        const home = activeZones()[homeIdx];
+        const when = el('span', { class: 'opt-when' }, [
+          el('i', { class: 'dot ' + o.slot.cats[homeIdx], 'aria-hidden': 'true' }),
+          document.createTextNode(T.clockTime(home.tz, ms, state.use24)),
+          el('span', { class: 'muted', text: T.shortDay(home.tz, ms) + ' · ' + home.city }),
+        ]);
+        const chips = el('span', { class: 'chips' });
+        for (const i of m.members) {
+          if (i === homeIdx) continue;
+          const z = activeZones()[i];
+          chips.append(el('span', { class: 'chip ' + o.slot.cats[i] }, [
+            el('b', { text: z.city }), document.createTextNode(' ' + T.shortTime(z.tz, ms, state.use24) + ' '),
+            el('small', { text: T.shortDay(z.tz, ms) }),
+          ]));
+        }
+        const btn = el('button', { type: 'button', class: 'opt' }, [
+          el('span', { class: 'opt-rank', text: String(oi + 1) }),
+          el('span', { class: 'opt-body' }, [when, chips.children.length ? chips : null]),
+        ]);
+        btn.addEventListener('click', () => openModal(ms, m.members.map((i) => activeZones()[i].id)));
+        ol.append(el('li', null, [btn]));
+      });
+      box.append(ol);
+      wrap.append(box);
+    });
+    return wrap;
   }
 
   function scrollGrid() {
@@ -477,6 +602,7 @@
   /* ---------------- modal ---------------- */
 
   let modalMs = null;
+  let modalIds = null; // zone ids to include; null = all
   let lastFocus = null;
 
   function timeRange(tz, start, end, use24) {
@@ -502,7 +628,8 @@
     const end = dur ? ms + dur * T.MIN : null;
     const withOffset = $('offsetChk').checked;
     const lines = ["Let's meet on:", ''];
-    for (const z of state.zones) {
+    const zones = modalIds ? activeZones().filter((z) => modalIds.indexOf(z.id) >= 0) : activeZones();
+    for (const z of zones) {
       const abbr = T.abbreviation(z.tz, ms);
       const dstChange = end != null && T.offsetMinutes(z.tz, ms) !== T.offsetMinutes(z.tz, end);
       const tags = [];
@@ -524,8 +651,9 @@
     $('copiedMsg').textContent = '';
   }
 
-  function openModal(ms) {
+  function openModal(ms, ids) {
     modalMs = ms;
+    modalIds = ids || null;
     lastFocus = document.activeElement;
     const home = homeZone();
     $('modalTitle').textContent = T.longDate(home.tz, ms).replace(/, \d{4}$/, '') + ' · ' +
