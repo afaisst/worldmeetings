@@ -566,6 +566,8 @@
   function fmtHours(h) { return h === 1 ? '1 h' : (h === 0.5 ? '30 min' : h + ' h'); }
 
   function renderGrid(resetScroll) {
+    // The calendar's holiday dots depend on the selected time zones, so refresh it too.
+    renderCalendar();
     const slots = computeSlots();
     currentSlots = slots;
     renderDayHead(slots);
