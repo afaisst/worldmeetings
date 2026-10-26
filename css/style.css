@@ -332,6 +332,9 @@ button, input, select, textarea { font: inherit; color: inherit; }
 
 /* ---------- suggestions ---------- */
 .right { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
+.suggest-actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; justify-content: flex-end; }
+.btn-sm { padding: 6px 12px; font-size: 13.5px; }
+.suggest .card-head { align-items: center; gap: 12px; flex-wrap: wrap; }
 .suggest-summary { margin: 0 0 14px; color: var(--muted); font-size: 14px; }
 .meetings { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px; }
 .meeting { border: 1px solid var(--border); border-radius: 10px; padding: 12px; background: var(--surface-2); min-width: 0; }

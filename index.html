@@ -102,7 +102,10 @@
       <section class="card suggest" aria-labelledby="suggestTitle">
         <div class="card-head">
           <h2 id="suggestTitle">Suggested times</h2>
-          <span class="hint">Click one to get text for an email.</span>
+          <div class="suggest-actions">
+            <span class="hint">Click one to get text for an email.</span>
+            <button type="button" class="btn btn-primary btn-sm" id="copyPlanBtn" hidden>Copy best suggestions</button>
+          </div>
         </div>
         <p class="suggest-summary" id="suggestSummary"></p>
         <div id="suggestBody"></div>

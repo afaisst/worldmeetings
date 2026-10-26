@@ -562,6 +562,8 @@
 
   /* ---------------- suggested times ---------------- */
 
+  let bestPlan = null; // [{ms, ids}] — best time of each meeting, when there are several
+
   function renderSuggestions(slots, strictPlan) {
     const body = $('suggestBody');
     body.textContent = '';
@@ -578,6 +580,12 @@
     else summary = 'No single time falls in everyone’s daytime (9am–8pm), so here are ' + k +
       ' meetings that together include every time zone. ' + home.city + ' (home) is in each one.';
     $('suggestSummary').textContent = summary;
+    // With several meetings, offer one text that lists the best time of each.
+    bestPlan = k > 1 ? strict.meetings.filter((m) => m.options.length).map((m) => ({
+      ms: m.options[0].slot.ms, ids: m.members.map((i) => activeZones()[i].id),
+    })) : null;
+    $('copyPlanBtn').hidden = !(bestPlan && bestPlan.length > 1);
+    if (bestPlan) $('copyPlanBtn').textContent = 'Copy best suggestions (' + bestPlan.length + ' meetings)';
     body.append(planView(strict.meetings, k > 1, null, true));
     if (strict.uncovered.length) {
       body.append(el('p', { class: 'suggest-empty', text: 'No good time found for: ' +
@@ -706,6 +714,7 @@
 
   let modalMs = null;
   let modalIds = null; // zone ids to include; null = all
+  let modalPlan = null; // several meetings at once ('Copy best suggestions')
   let lastFocus = null;
 
   function timeRange(tz, start, end, use24) {
@@ -726,12 +735,28 @@
     return range;
   }
 
+  const NUM_WORDS = ['zero', 'one', 'two', 'three', 'four', 'five', 'six'];
+
   function buildEmailText(ms) {
+    if (modalPlan) {
+      const k = modalPlan.length;
+      const lines = ['No single time works well for every time zone, so let\'s have ' + (NUM_WORDS[k] || k) + ' meetings:'];
+      modalPlan.forEach((p, i) => {
+        const names = activeZones().filter((z) => p.ids.indexOf(z.id) >= 0).map((z) => z.city);
+        lines.push('', 'Meeting ' + (i + 1) + ' (' + names.join(', ') + '):');
+        lines.push(...zoneLines(p.ms, p.ids));
+      });
+      return lines.join('\n');
+    }
+    return ["Let's meet on:", ''].concat(zoneLines(ms, modalIds)).join('\n');
+  }
+
+  function zoneLines(ms, ids) {
     const dur = parseInt($('durationSel').value, 10);
     const end = dur ? ms + dur * T.MIN : null;
     const withOffset = $('offsetChk').checked;
-    const lines = ["Let's meet on:", ''];
-    const zones = modalIds ? activeZones().filter((z) => modalIds.indexOf(z.id) >= 0) : activeZones();
+    const lines = [];
+    const zones = ids ? activeZones().filter((z) => ids.indexOf(z.id) >= 0) : activeZones();
     for (const z of zones) {
       const abbr = T.abbreviation(z.tz, ms);
       const dstChange = end != null && T.offsetMinutes(z.tz, ms) !== T.offsetMinutes(z.tz, end);
@@ -744,7 +769,7 @@
       lines.push('• ' + z.city + ': ' + T.longDate(z.tz, ms) + ', ' + timeRange(z.tz, ms, end, state.use24) +
         (tags.length ? ' (' + tags.join(', ') + ')' : ''));
     }
-    return lines.join('\n');
+    return lines;
   }
 
   function updateEmailText() {
@@ -757,6 +782,7 @@
   function openModal(ms, ids) {
     modalMs = ms;
     modalIds = ids || null;
+    modalPlan = null;
     lastFocus = document.activeElement;
     const home = homeZone();
     $('modalTitle').textContent = T.longDate(home.tz, ms).replace(/, \d{4}$/, '') + ' · ' +
@@ -765,6 +791,19 @@
     $('modal').hidden = false;
     $('copyBtn').focus();
   }
+
+  function openPlanModal() {
+    if (!bestPlan) return;
+    modalPlan = bestPlan.slice();
+    modalMs = null;
+    modalIds = null;
+    lastFocus = document.activeElement;
+    $('modalTitle').textContent = 'Best suggestions · ' + modalPlan.length + ' meetings';
+    updateEmailText();
+    $('modal').hidden = false;
+    $('copyBtn').focus();
+  }
+  $('copyPlanBtn').addEventListener('click', openPlanModal);
   function closeModal() {
     $('modal').hidden = true;
     if (lastFocus && lastFocus.focus) lastFocus.focus();
