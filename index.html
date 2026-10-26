@@ -74,7 +74,8 @@
       </div>
 
       <div class="legend">
-        <span><i class="sw good"></i>Working hours (9am–8pm)</span>
+        <span><i class="sw good"></i>Working hours (9am–6pm)</span>
+        <span><i class="sw ok"></i>Late afternoon (6–8pm)</span>
         <span><i class="sw shoulder"></i>Morning / evening (7–9am, 8–11pm)</span>
         <span><i class="sw night"></i>Night</span>
         <span class="legend-tip">Click a time to get text for an email.</span>
@@ -106,9 +107,11 @@
             <option value="60" selected>1 hour</option>
             <option value="90">1.5 hours</option>
             <option value="120">2 hours</option>
+            <option value="150">2.5 hours</option>
+            <option value="180">3 hours</option>
           </select>
         </label>
-        <label class="check"><input type="checkbox" id="offsetChk" checked> Show UTC offsets</label>
+        <label class="check"><input type="checkbox" id="offsetChk"> Show UTC offsets</label>
       </div>
       <textarea id="emailText" rows="8" spellcheck="false" aria-label="Text to copy"></textarea>
       <div class="modal-foot">

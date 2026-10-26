@@ -14,7 +14,9 @@
 
   --good: #34a865;
   --good-ink: #ffffff;
-  --shoulder: #c9ecd4;
+  --ok: #86d3a2;
+  --ok-ink: #12391f;
+  --shoulder: #d3f0dc;
   --shoulder-ink: #1d4d2e;
   --night: #e3e5e4;
   --night-ink: #69736e;
@@ -41,8 +43,10 @@
 
     --good: #3fbf73;
     --good-ink: #06140c;
-    --shoulder: #3d7a55;
-    --shoulder-ink: #e3f7ea;
+    --ok: #2f8a55;
+    --ok-ink: #e9fbef;
+    --shoulder: #2a5139;
+    --shoulder-ink: #cdebd8;
     --night: #262b29;
     --night-ink: #7e8a84;
     --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 4px 16px rgba(0, 0, 0, .25);
@@ -204,6 +208,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .legend .sw { width: 14px; height: 14px; border-radius: 4px; display: inline-block; }
 .legend-tip { margin-left: auto; }
 .sw.good { background: var(--good); }
+.sw.ok { background: var(--ok); }
 .sw.shoulder { background: var(--shoulder); }
 .sw.night { background: var(--night); }
 
@@ -250,7 +255,10 @@ button, input, select, textarea { font: inherit; color: inherit; }
   font-variant-numeric: tabular-nums; font-size: 13.5px; font-weight: 600; line-height: 1.15;
 }
 .cell small { font-size: 10.5px; font-weight: 500; opacity: .8; margin-top: 2px; }
+.cell small + small { margin-top: 0; }
+.cell small.other-day { font-weight: 700; opacity: 1; }
 .cell.good { background: var(--good); color: var(--good-ink); }
+.cell.ok { background: var(--ok); color: var(--ok-ink); }
 .cell.shoulder { background: var(--shoulder); color: var(--shoulder-ink); }
 .cell.night { background: var(--night); color: var(--night-ink); }
 .cell.daystart { box-shadow: inset 2px 0 0 0 currentColor; }

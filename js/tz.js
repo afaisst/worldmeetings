@@ -107,16 +107,18 @@
   /**
    * night    : before 7:00 or from 23:00
    * shoulder : 7:00–8:59 and 20:00–22:59 (morning / evening)
-   * good     : 9:00–19:59
+   * ok       : 18:00–19:59 (late afternoon)
+   * good     : 9:00–17:59
    */
   function category(tz, ms) {
     const p = getParts(tz, ms);
     const h = p.hour + p.minute / 60;
     if (h < 7 || h >= 23) return 'night';
     if (h < 9 || h >= 20) return 'shoulder';
+    if (h >= 18) return 'ok';
     return 'good';
   }
-  const SCORE = { night: 0, shoulder: 1, good: 2 };
+  const SCORE = { night: 0, shoulder: 1, ok: 2, good: 3 };
 
   /* ---------- formatting ---------- */
 

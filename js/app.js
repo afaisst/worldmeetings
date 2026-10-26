@@ -398,16 +398,16 @@
     grid.append(labels);
 
     const ordered = state.sort === 'best'
-      // Fewest people at night first, then most people in working hours, then earliest.
-      ? slots.slice().sort((a, b) => a.nights - b.nights || b.goods - a.goods || a.ms - b.ms)
+      // Fewest people at night first, then the best overall fit, then earliest.
+      ? slots.slice().sort((a, b) => a.nights - b.nights || b.score - a.score || b.goods - a.goods || a.ms - b.ms)
       : slots;
 
     const startOffsets = state.zones.map((z) => T.offsetMinutes(z.tz, slots[0].ms));
 
     for (const s of ordered) {
       const isNow = now >= s.ms && now < s.ms + SLOT_MIN * T.MIN;
-      const fitPct = Math.round((s.score / (2 * n)) * 100);
-      const fit = el('div', { class: 'fit' + (s.min === 2 ? ' perfect' : '') + (s.score === 0 ? ' zero' : '') }, [
+      const fitPct = Math.round((s.score / (T.SCORE.good * n)) * 100);
+      const fit = el('div', { class: 'fit' + (s.min === T.SCORE.good ? ' perfect' : '') + (s.score === 0 ? ' zero' : '') }, [
         el('i', { style: 'height:' + Math.max(8, fitPct) + '%' }),
       ]);
       if (isNow) fit.append(el('span', { class: 'now-tag', text: 'now' }));
@@ -417,11 +417,14 @@
       state.zones.forEach((z, i) => {
         const time = T.shortTime(z.tz, s.ms, state.use24);
         const diff = T.dayDiff(z.tz, s.ms, y, m, d);
-        let small = '';
-        if (diff !== 0) small = T.shortDay(z.tz, s.ms);
-        else if (T.offsetMinutes(z.tz, s.ms) !== startOffsets[i]) small = T.abbreviation(z.tz, s.ms) || T.offsetLabel(z.tz, s.ms);
+        // Every tile shows its local date; dates that differ from the selected day are emphasized.
+        const day = T.shortDay(z.tz, s.ms);
+        // After a daylight-saving change during the day, also show the new zone abbreviation.
+        const dst = T.offsetMinutes(z.tz, s.ms) !== startOffsets[i] ? (T.abbreviation(z.tz, s.ms) || T.offsetLabel(z.tz, s.ms)) : '';
+        const small = day + (dst ? ' ' + dst : '');
         const cell = el('div', { class: 'cell ' + s.cats[i] }, [document.createTextNode(time)]);
-        if (small) cell.append(el('small', { text: small }));
+        cell.append(el('small', { class: diff !== 0 ? 'other-day' : '', text: day }));
+        if (dst) cell.append(el('small', { text: dst }));
         const p = T.getParts(z.tz, s.ms);
         if (state.sort === 'chrono' && p.hour === 0 && s.idx > 0) cell.classList.add('daystart');
         col.append(cell);

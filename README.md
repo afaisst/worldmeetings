@@ -8,10 +8,11 @@ An app to schedule meetings easily across the globe.
 - **Calendar** (top left): pick a day. The day is interpreted in your *home* time zone (marked with the house icon; your own zone by default).
 - **Time zones** (left): add zones by searching a city, country or IANA zone name (`+ Add Time Zone`), remove them with `−`, and drag the `⠿` handle (or focus it and press ↑/↓) to reorder. The order is the row order of the time grid. Click the house icon to make another zone the home zone.
 - **Time grid** (right): one row per time zone, one column per hour of the selected day.
-  - green: working hours (9am – 8pm)
+  - green: working hours (9am – 6pm)
+  - medium green: late afternoon (6 – 8pm)
   - light green: morning / evening (7 – 9am, 8 – 11pm)
   - gray: night (before 7am, from 11pm)
-- **Sort times**: *Chronological* or *Best first* (fewest people at night, then most people in working hours).
+- **Sort times**: *Chronological* or *Best first* (fewest people at night, then the best overall fit).
 - **Click any time** to open a dialog with ready-to-paste email text ("Let's meet on: …") listing the time in every zone, with an optional duration and UTC offsets. Click **Copy**.
 - 12h / 24h toggle; settings are remembered in your browser (localStorage).
 
